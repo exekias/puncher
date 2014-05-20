@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# encoding: utf-8
 import keyring
 import re
 import os
@@ -22,6 +23,7 @@ class Puncher(object):
     BASE_URL = 'https://tt.zentyal.com'
     ROUTES = {'punch-in': '/timetracking/punch/punch_in',
               'punch-out': '/timetracking/punch/punch_out',
+              'punch': '/timetracking/punch',
               'hq': '/timetracking/hq'}
 
     def __init__(self):
@@ -58,11 +60,17 @@ class Puncher(object):
 
     def punch_in(self):
         body = self._get('punch-in')
-        return self.ROUTES['punch-out'] in body
+        if self.ROUTES['punch-out'] not in body:
+            raise RuntimeError("Punch in failed")
+
+        return self.working_time(body)
 
     def punch_out(self):
         body = self._get('punch-out')
-        return self.ROUTES['punch-in'] in body
+        if self.ROUTES['punch-in'] not in body:
+            raise RuntimeError("Punch out failed")
+
+        return self.working_time(body)
 
     def people_working(self):
         body = self._get('hq')
@@ -74,6 +82,22 @@ class Puncher(object):
                 ret.append(name.group(1))
         return ret
 
+    def working_time(self, body=None):
+        """
+        Return a tuple of (today, week) worked hours
+        """
+        if body is None:
+            body = self._get('punch')
+
+        day_re = re.compile(r"d.a[^0-9]*([0-9]+:[0-9]+)")
+        week_re = re.compile(r"semana[^0-9]*([0-9]+:[0-9]+)")
+        day = day_re.search(body)
+        week = week_re.search(body)
+
+        day = day.group(1) if day else '?'
+        week = week.group(1) if week else '?'
+        return (day, week)
+
     def _get(self, route):
         return requests.get(self.BASE_URL + self.ROUTES[route],
                             auth=(self.username, self.password)).text
@@ -84,6 +108,11 @@ def print_people_working(people_working):
     print "==============" + bcolors.ENDC
     for person in p.people_working():
         print bcolors.OKBLUE + person
+    print bcolors.ENDC
+
+def print_working_time(working_time):
+    print bcolors.OKBLUE + "Today hours: " + bcolors.OKGREEN + working_time[0] + bcolors.ENDC
+    print bcolors.OKBLUE + "Week hours: " + working_time[1] + bcolors.ENDC
     print bcolors.ENDC
 
 
@@ -98,18 +127,29 @@ if __name__ == '__main__':
         usage()
 
     elif sys.argv[1] == 'in':
-        if not p.punch_in():
-            print bcolors.FAIL + "I couldn't punch in :-/" + bcolors.ENDC
-        else:
-            print_people_working(p.people_working())
+        try:
+            working_time = p.punch_in()
             print bcolors.OKGREEN + "Punch in done!" + bcolors.ENDC
+            print ''
+
+            print_working_time(working_time)
+            print_people_working(p.people_working())
+        except:
+            print bcolors.FAIL + "I couldn't punch in :-/" + bcolors.ENDC
 
     elif sys.argv[1] == 'out':
-        if not p.punch_out():
-            print bcolors.FAIL + "I couldn't punch out :-/" + bcolors.ENDC
-        else:
+        try:
+            working_time = p.punch_out()
             print bcolors.OKGREEN + "Punch out done!" + bcolors.ENDC
+            print ''
+
+            print_working_time(working_time)
+            print_people_working(p.people_working())
+        except:
+            print bcolors.FAIL + "I couldn't punch out :-/" + bcolors.ENDC
+
     elif sys.argv[1] == 'status':
+        working_time = p.working_time()
         people_working = p.people_working()
         print ''
         if p.get_fullname() in people_working:
@@ -117,6 +157,8 @@ if __name__ == '__main__':
         else:
             print bcolors.FAIL + "Punched [OUT]" + bcolors.ENDC
         print ''
+        print_working_time(working_time)
+
         # print what other are doing
         print_people_working(people_working)
 
