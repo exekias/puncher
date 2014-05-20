@@ -7,6 +7,7 @@ import sys
 import requests
 import configobj
 import getpass
+import threading
 
 
 class bcolors:
@@ -88,11 +89,10 @@ class Puncher(object):
 
         day = day.group(1) if day else '?'
         week = week.group(1) if week else '?'
-        return (day, week)
 
-    def is_punched_in(self):
-        body = self._get('punch')
-        return self.ROUTES['punch-out'] in body
+        is_punched_in = self.ROUTES['punch-out'] in body
+
+        return (day, week, is_punched_in)
 
     def _get(self, route):
         return requests.get(self.BASE_URL + self.ROUTES[route],
@@ -101,9 +101,9 @@ class Puncher(object):
 
 def print_people_working(people_working):
     print bcolors.HEADER + "People working"
-    print "==============" + bcolors.ENDC
-    for person in p.people_working():
-        print bcolors.OKBLUE + person
+    print "==============" + bcolors.ENDC + bcolors.OKBLUE
+    for person in people_working:
+        print person
     print bcolors.ENDC
 
 def print_working_time(working_time):
@@ -145,10 +145,29 @@ if __name__ == '__main__':
             print bcolors.FAIL + "I couldn't punch out :-/" + bcolors.ENDC
 
     elif sys.argv[1] == 'status':
-        working_time = p.working_time()
-        people_working = p.people_working()
+        people_working = None
+        is_punched_in = False
+        working_time = None
+
+        def fetch_people_working():
+            global people_working
+            people_working = p.people_working()
+
+        def fetch_working_time():
+            global is_punched_in
+            global working_time
+            working_time = p.working_time()
+            is_punched_in = working_time[2]
+
+        threads = [threading.Thread(target=fetch_people_working),
+                   threading.Thread(target=fetch_working_time)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
         print ''
-        if p.is_punched_in():
+        if is_punched_in:
             print bcolors.OKGREEN + "Punched [IN]" + bcolors.ENDC
         else:
             print bcolors.FAIL + "Punched [OUT]" + bcolors.ENDC
