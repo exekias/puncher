@@ -1,0 +1,124 @@
+#!/usr/bin/env python
+import keyring
+import re
+import os
+import sys
+import requests
+import configobj
+import getpass
+
+
+class bcolors:
+    HEADER = '\033[1m\033[95m'
+    OKBLUE = '\033[94m'
+    OKGREEN = '\033[1m\033[92m'
+    FAIL = '\033[1m\033[91m'
+    ENDC = '\033[0m'
+
+
+class Puncher(object):
+    APP_NAME = 'ttzentyal puncher'
+    APP_NAME_TTZENTYAL = "Zentyal Time Tracker"
+    BASE_URL = 'https://tt.zentyal.com'
+    ROUTES = {'punch-in': '/timetracking/punch/punch_in',
+              'punch-out': '/timetracking/punch/punch_out',
+              'hq': '/timetracking/hq'}
+
+    def __init__(self):
+        self.username = ''
+        self.password = ''
+        self.fullname = ''
+        self._get_username()
+        self._get_password()
+
+    def _get_username(self):
+        conf_file_punch = config_file = os.path.join(os.environ['HOME'], '.ttpuncher')
+        if not os.path.exists(config_file):
+            config_file = os.path.join(os.environ['HOME'], '.ttzentyal')
+        try:
+            conf_obj = configobj.ConfigObj(config_file, encoding='UTF8')
+            self.username = conf_obj["username"]
+            if "fullname" in conf_obj:
+                self.fullname = conf_obj["fullname"]
+        except:
+            print ("You need to create a %s file and define username key, something like:\n"
+                   "username=jconnor" % conf_file_punch)
+            sys.exit(1)
+
+    def _get_password(self):
+        self.password = keyring.get_password(self.APP_NAME, self.username)
+        if not self.password:
+            self.password = keyring.get_password(self.APP_NAME_TTZENTYAL, self.username)
+        if not self.password:
+            self.password = getpass.getpass(prompt=("Password for %s: " % self.username))
+            keyring.set_password(self.APP_NAME, self.username, self.password)
+
+    def get_fullname(self):
+        return self.fullname
+
+    def punch_in(self):
+        body = self._get('punch-in')
+        return self.ROUTES['punch-out'] in body
+
+    def punch_out(self):
+        body = self._get('punch-out')
+        return self.ROUTES['punch-in'] in body
+
+    def people_working(self):
+        body = self._get('hq')
+        name_re = re.compile(r"<td>([^0-9]*)</td>")
+        ret = []
+        for line in body.split("\n"):
+            name = name_re.search(line)
+            if name:
+                ret.append(name.group(1))
+        return ret
+
+    def _get(self, route):
+        return requests.get(self.BASE_URL + self.ROUTES[route],
+                            auth=(self.username, self.password)).text
+
+
+def print_people_working(people_working):
+    print bcolors.HEADER + "People working"
+    print "==============" + bcolors.ENDC
+    for person in p.people_working():
+        print bcolors.OKBLUE + person
+    print bcolors.ENDC
+
+
+def usage():
+    print "Use %s in|out" % sys.argv[0]
+
+
+if __name__ == '__main__':
+    p = Puncher()
+
+    if len(sys.argv) != 2:
+        usage()
+
+    elif sys.argv[1] == 'in':
+        if not p.punch_in():
+            print bcolors.FAIL + "I couldn't punch in :-/" + bcolors.ENDC
+        else:
+            print_people_working(p.people_working())
+            print bcolors.OKGREEN + "Punch in done!" + bcolors.ENDC
+
+    elif sys.argv[1] == 'out':
+        if not p.punch_out():
+            print bcolors.FAIL + "I couldn't punch out :-/" + bcolors.ENDC
+        else:
+            print bcolors.OKGREEN + "Punch out done!" + bcolors.ENDC
+    elif sys.argv[1] == 'status':
+        people_working = p.people_working()
+        print ''
+        if p.get_fullname() in people_working:
+            print bcolors.OKGREEN + "Punched [IN]" + bcolors.ENDC
+        else:
+            print bcolors.FAIL + "Punched [OUT]" + bcolors.ENDC
+        print ''
+        # print what other are doing
+        print_people_working(people_working)
+
+    else:
+        usage()
