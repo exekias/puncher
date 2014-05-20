@@ -88,7 +88,7 @@ def print_people_working(people_working):
 
 
 def usage():
-    print "Use %s in|out" % sys.argv[0]
+    print "Use %s in|out|status" % sys.argv[0]
 
 
 if __name__ == '__main__':
