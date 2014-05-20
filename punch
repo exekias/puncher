@@ -27,9 +27,6 @@ class Puncher(object):
               'hq': '/timetracking/hq'}
 
     def __init__(self):
-        self.username = ''
-        self.password = ''
-        self.fullname = ''
         self._get_username()
         self._get_password()
 
@@ -40,8 +37,6 @@ class Puncher(object):
         try:
             conf_obj = configobj.ConfigObj(config_file, encoding='UTF8')
             self.username = conf_obj["username"]
-            if "fullname" in conf_obj:
-                self.fullname = conf_obj["fullname"]
         except:
             print ("You need to create a %s file and define username key, something like:\n"
                    "username=jconnor" % conf_file_punch)
@@ -54,9 +49,6 @@ class Puncher(object):
         if not self.password:
             self.password = getpass.getpass(prompt=("Password for %s: " % self.username))
             keyring.set_password(self.APP_NAME, self.username, self.password)
-
-    def get_fullname(self):
-        return self.fullname
 
     def punch_in(self):
         body = self._get('punch-in')
@@ -97,6 +89,10 @@ class Puncher(object):
         day = day.group(1) if day else '?'
         week = week.group(1) if week else '?'
         return (day, week)
+
+    def is_punched_in(self):
+        body = self._get('punch')
+        return self.ROUTES['punch-out'] in body
 
     def _get(self, route):
         return requests.get(self.BASE_URL + self.ROUTES[route],
@@ -152,7 +148,7 @@ if __name__ == '__main__':
         working_time = p.working_time()
         people_working = p.people_working()
         print ''
-        if p.get_fullname() in people_working:
+        if p.is_punched_in():
             print bcolors.OKGREEN + "Punched [IN]" + bcolors.ENDC
         else:
             print bcolors.FAIL + "Punched [OUT]" + bcolors.ENDC
