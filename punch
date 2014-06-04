@@ -9,7 +9,6 @@ import configobj
 import getpass
 import threading
 
-
 class bcolors:
     HEADER = '\033[1m\033[95m'
     OKBLUE = '\033[94m'
@@ -25,7 +24,9 @@ class Puncher(object):
     ROUTES = {'punch-in': '/timetracking/punch/punch_in',
               'punch-out': '/timetracking/punch/punch_out',
               'punch': '/timetracking/punch',
-              'hq': '/timetracking/hq'}
+              'hq': '/timetracking/hq',
+              'adage-up': '/timetracking/adage/up',
+              'adage-down': '/timetracking/adage/down'}
 
     def __init__(self):
         self._get_username()
@@ -56,14 +57,20 @@ class Puncher(object):
         if self.ROUTES['punch-out'] not in body:
             raise RuntimeError("Punch in failed")
 
-        return self.working_time(body)
+        return self.working_info(body)
 
     def punch_out(self):
         body = self._get('punch-out')
         if self.ROUTES['punch-in'] not in body:
             raise RuntimeError("Punch out failed")
 
-        return self.working_time(body)
+        return self.working_info(body)
+
+    def vote_up(self):
+        body = self._post('adage-up')
+
+    def vote_down(self):
+        body = self._post('adage-down')
 
     def people_working(self):
         body = self._get('hq')
@@ -75,9 +82,17 @@ class Puncher(object):
                 ret.append(name.group(1))
         return ret
 
-    def working_time(self, body=None):
+    def working_info(self, body=None):
         """
-        Return a tuple of (today, week) worked hours
+        Return a tuple of:
+          - Today worked hours
+          - Week worked hours
+          - Punched_in (boolean)
+          - adage message
+          - adage creator
+          - adage author
+          - adage votes
+          - adage karma
         """
         if body is None:
             body = self._get('punch')
@@ -92,10 +107,27 @@ class Puncher(object):
 
         is_punched_in = self.ROUTES['punch-out'] in body
 
-        return (day, week, is_punched_in)
+        adage_message = re.search(r"<pre class=\"adage_message\">(.*)</pre>", body)
+        adage_creator = re.search(r"<p class=\"adage_creator\">(.*)</p>", body)
+        adage_author = re.search(r"<p class=\"adage_author\">(.*)</p>", body)
+        adage_votes = re.search(r"Votos: (.*)", body)
+        adage_karma = re.search(r"Karma: (.*)", body)
+
+        adage_message = adage_message.group(1) if adage_message else '?'
+        adage_creator = adage_creator.group(1) if adage_creator else '?'
+        adage_author = adage_author.group(1) if adage_author else '?'
+        adage_votes = adage_votes.group(1) if adage_votes else '?'
+        adage_karma = adage_karma.group(1) if adage_karma else '?'
+
+        return (day, week, is_punched_in, adage_message,
+                adage_creator, adage_author, adage_votes, adage_karma)
 
     def _get(self, route):
         return requests.get(self.BASE_URL + self.ROUTES[route],
+                            auth=(self.username, self.password)).text
+
+    def _post(self, route):
+        return requests.post(self.BASE_URL + self.ROUTES[route],
                             auth=(self.username, self.password)).text
 
 
@@ -106,61 +138,79 @@ def print_people_working(people_working):
         print person
     print bcolors.ENDC
 
-def print_working_time(working_time):
-    print bcolors.OKBLUE + "Today hours: " + bcolors.OKGREEN + working_time[0] + bcolors.ENDC
-    print bcolors.OKBLUE + "Week hours: " + working_time[1] + bcolors.ENDC
+def print_working_info(working_info):
+    print bcolors.OKBLUE + "Today hours: " + bcolors.OKGREEN + working_info[0] + bcolors.ENDC
+    print bcolors.OKBLUE + "Week hours: " + working_info[1] + bcolors.ENDC
+    print bcolors.ENDC
+    print bcolors.OKBLUE + "Adage: " + bcolors.OKGREEN + working_info[3] + bcolors.ENDC
+    print bcolors.OKBLUE + "created by: " + bcolors.OKGREEN + working_info[4] + bcolors.ENDC + " " + \
+          bcolors.OKBLUE + "author: " + bcolors.OKGREEN + working_info[5] + bcolors.ENDC
+    print bcolors.OKBLUE + "votes: " + bcolors.OKGREEN + working_info[6] + bcolors.ENDC + " " + \
+          bcolors.OKBLUE + "karma: " + bcolors.OKGREEN + working_info[7] + bcolors.ENDC
     print bcolors.ENDC
 
 
 def usage():
-    print "Use %s in|out|status" % sys.argv[0]
+    print "Use %s in|out|status|vote [+|-]" % sys.argv[0]
 
 
 if __name__ == '__main__':
     p = Puncher()
 
-    if len(sys.argv) != 2:
+    if len(sys.argv) not in (2, 3):
         usage()
 
     elif sys.argv[1] == 'in':
         try:
-            working_time = p.punch_in()
+            working_info = p.punch_in()
             print bcolors.OKGREEN + "Punch in done!" + bcolors.ENDC
             print ''
 
-            print_working_time(working_time)
+            print_working_info(working_info)
             print_people_working(p.people_working())
         except:
             print bcolors.FAIL + "I couldn't punch in :-/" + bcolors.ENDC
 
     elif sys.argv[1] == 'out':
         try:
-            working_time = p.punch_out()
+            working_info = p.punch_out()
             print bcolors.OKGREEN + "Punch out done!" + bcolors.ENDC
             print ''
 
-            print_working_time(working_time)
+            print_working_info(working_info)
             print_people_working(p.people_working())
         except:
             print bcolors.FAIL + "I couldn't punch out :-/" + bcolors.ENDC
 
-    elif sys.argv[1] == 'status':
+    elif sys.argv[1] == 'vote':
+        if len(sys.argv) != 3 or sys.argv[2] not in '+-':
+            print bcolors.FAIL + "Unkown vote, use + or - as argument" + bcolors.ENDC
+            sys.exit(1)
+
+        if sys.argv[2] == '+':
+            p.vote_up()
+
+        elif sys.argv[2] == '-':
+            p.vote_down()
+        print bcolors.OKGREEN + "Vote sent!" + bcolors.ENDC
+
+    elif sys.argv[1] in ('status', 'st'):
         people_working = None
         is_punched_in = False
-        working_time = None
+        working_info = None
 
         def fetch_people_working():
             global people_working
             people_working = p.people_working()
 
-        def fetch_working_time():
+        def fetch_working_info():
             global is_punched_in
-            global working_time
-            working_time = p.working_time()
-            is_punched_in = working_time[2]
+            global working_info
+            working_info = p.working_info()
+            is_punched_in = working_info[2]
 
         threads = [threading.Thread(target=fetch_people_working),
-                   threading.Thread(target=fetch_working_time)]
+                   threading.Thread(target=fetch_working_info)]
         for t in threads:
             t.start()
         for t in threads:
@@ -172,7 +222,7 @@ if __name__ == '__main__':
         else:
             print bcolors.FAIL + "Punched [OUT]" + bcolors.ENDC
         print ''
-        print_working_time(working_time)
+        print_working_info(working_info)
 
         # print what other are doing
         print_people_working(people_working)
