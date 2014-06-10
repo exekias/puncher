@@ -107,7 +107,7 @@ class Puncher(object):
 
         is_punched_in = self.ROUTES['punch-out'] in body
 
-        adage_message = re.search(r"<pre class=\"adage_message\">(.*)</pre>", body)
+        adage_message = re.search(r"<pre class=\"adage_message\">(.*)</pre>", body, re.DOTALL)
         adage_creator = re.search(r"<p class=\"adage_creator\">(.*)</p>", body)
         adage_author = re.search(r"<p class=\"adage_author\">(.*)</p>", body)
         adage_votes = re.search(r"Votos: (.*)", body)
