@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # encoding: utf-8
+import codecs
 import keyring
+import locale
 import re
 import os
 import sys
@@ -8,6 +10,7 @@ import requests
 import configobj
 import getpass
 import threading
+
 
 class bcolors:
     HEADER = '\033[1m\033[95m'
@@ -67,10 +70,10 @@ class Puncher(object):
         return self.working_info(body)
 
     def vote_up(self):
-        body = self._post('adage-up')
+        self._post('adage-up')
 
     def vote_down(self):
-        body = self._post('adage-down')
+        self._post('adage-down')
 
     def people_working(self):
         body = self._get('hq')
@@ -80,7 +83,8 @@ class Puncher(object):
             name = name_re.search(line)
             if name:
                 ret.append(name.group(1))
-        return ret
+        # Return the names sorted by first name
+        return sorted(ret)
 
     def working_info(self, body=None):
         """
@@ -128,7 +132,7 @@ class Puncher(object):
 
     def _post(self, route):
         return requests.post(self.BASE_URL + self.ROUTES[route],
-                            auth=(self.username, self.password)).text
+                             auth=(self.username, self.password)).text
 
 
 def print_people_working(people_working):
@@ -138,15 +142,16 @@ def print_people_working(people_working):
         print person
     print bcolors.ENDC
 
+
 def print_working_info(working_info):
     print bcolors.OKBLUE + "Today hours: " + bcolors.OKGREEN + working_info[0] + bcolors.ENDC
     print bcolors.OKBLUE + "Week hours: " + working_info[1] + bcolors.ENDC
     print bcolors.ENDC
     print bcolors.OKBLUE + "Adage: " + bcolors.OKGREEN + working_info[3] + bcolors.ENDC
-    print bcolors.OKBLUE + "created by: " + bcolors.OKGREEN + working_info[4] + bcolors.ENDC + " " + \
-          bcolors.OKBLUE + "author: " + bcolors.OKGREEN + working_info[5] + bcolors.ENDC
-    print bcolors.OKBLUE + "votes: " + bcolors.OKGREEN + working_info[6] + bcolors.ENDC + " " + \
-          bcolors.OKBLUE + "karma: " + bcolors.OKGREEN + working_info[7] + bcolors.ENDC
+    print (bcolors.OKBLUE + "created by: " + bcolors.OKGREEN + working_info[4] + bcolors.ENDC + " " +
+           bcolors.OKBLUE + "author: " + bcolors.OKGREEN + working_info[5] + bcolors.ENDC)
+    print (bcolors.OKBLUE + "votes: " + bcolors.OKGREEN + working_info[6] + bcolors.ENDC + " " +
+           bcolors.OKBLUE + "karma: " + bcolors.OKGREEN + working_info[7] + bcolors.ENDC)
     print bcolors.ENDC
 
 
@@ -156,6 +161,10 @@ def usage():
 
 if __name__ == '__main__':
     p = Puncher()
+
+    if sys.stdout.encoding is None:
+        # It happens on pipelining the output to another program like grep
+        sys.stdout = codecs.getwriter(locale.getpreferredencoding())(sys.stdout)
 
     if len(sys.argv) not in (2, 3):
         usage()
