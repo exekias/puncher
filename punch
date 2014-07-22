@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # encoding: utf-8
+import codecs
 import keyring
+import locale
 import re
 import os
 import sys
@@ -159,6 +161,10 @@ def usage():
 
 if __name__ == '__main__':
     p = Puncher()
+
+    if sys.stdout.encoding is None:
+        # It happens on pipelining the output to another program like grep
+        sys.stdout = codecs.getwriter(locale.getpreferredencoding())(sys.stdout)
 
     if len(sys.argv) not in (2, 3):
         usage()
