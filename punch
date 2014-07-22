@@ -81,7 +81,8 @@ class Puncher(object):
             name = name_re.search(line)
             if name:
                 ret.append(name.group(1))
-        return ret
+        # Return the names sorted by first name
+        return sorted(ret)
 
     def working_info(self, body=None):
         """
