@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# PYTHON_ARGCOMPLETE_OK
 # encoding: utf-8
 import argparse
 import codecs
@@ -11,6 +12,12 @@ import requests
 import configobj
 import getpass
 import threading
+
+try:
+    import argcomplete
+    __autocomplete = True
+except:
+    __autocomplete = False
 
 
 class bcolors:
@@ -174,6 +181,9 @@ if __name__ == '__main__':
     vote_parser.add_argument('vote_action', type=str,
                              choices=('+', '-'),
                              help="+ to vote a good adage, - to vote a bad adage")
+
+    if __autocomplete:
+        argcomplete.autocomplete(parser)
 
     args = parser.parse_args()
 
