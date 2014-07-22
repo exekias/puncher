@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # encoding: utf-8
+import argparse
 import codecs
 import keyring
 import locale
@@ -160,16 +161,29 @@ def usage():
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Puncher application. " + "Use %s in|out|status|vote [+|-]" % sys.argv[0])
+    subparsers = parser.add_subparsers(title="punch actions", dest="punch_action")
+
+    # Create the sub-parsers for every sub-command
+    in_parser = subparsers.add_parser('in', help="Punch in")
+    out_parser = subparsers.add_parser('out', help="Punch out")
+    status_parser = subparsers.add_parser('status', help="Status")
+    st_parser = subparsers.add_parser('st', help="Status")
+
+    vote_parser = subparsers.add_parser('vote', help="Adage vote")
+    vote_parser.add_argument('vote_action', type=str,
+                             choices=('+', '-'),
+                             help="+ to vote a good adage, - to vote a bad adage")
+
+    args = parser.parse_args()
+
     p = Puncher()
 
     if sys.stdout.encoding is None:
         # It happens on pipelining the output to another program like grep
         sys.stdout = codecs.getwriter(locale.getpreferredencoding())(sys.stdout)
 
-    if len(sys.argv) not in (2, 3):
-        usage()
-
-    elif sys.argv[1] == 'in':
+    if args.punch_action == 'in':
         try:
             working_info = p.punch_in()
             print bcolors.OKGREEN + "Punch in done!" + bcolors.ENDC
@@ -180,7 +194,7 @@ if __name__ == '__main__':
         except:
             print bcolors.FAIL + "I couldn't punch in :-/" + bcolors.ENDC
 
-    elif sys.argv[1] == 'out':
+    elif args.punch_action == 'out':
         try:
             working_info = p.punch_out()
             print bcolors.OKGREEN + "Punch out done!" + bcolors.ENDC
@@ -191,19 +205,14 @@ if __name__ == '__main__':
         except:
             print bcolors.FAIL + "I couldn't punch out :-/" + bcolors.ENDC
 
-    elif sys.argv[1] == 'vote':
-        if len(sys.argv) != 3 or sys.argv[2] not in '+-':
-            print bcolors.FAIL + "Unkown vote, use + or - as argument" + bcolors.ENDC
-            sys.exit(1)
-
-        if sys.argv[2] == '+':
+    elif args.punch_action == 'vote':
+        if args.vote_action == '+':
             p.vote_up()
-
-        elif sys.argv[2] == '-':
+        elif args.vote_action == '-':
             p.vote_down()
         print bcolors.OKGREEN + "Vote sent!" + bcolors.ENDC
 
-    elif sys.argv[1] in ('status', 'st'):
+    elif args.punch_action in ('status', 'st'):
         people_working = None
         is_punched_in = False
         working_info = None
@@ -237,4 +246,5 @@ if __name__ == '__main__':
         print_people_working(people_working)
 
     else:
+        # This path is never reached :)
         usage()
