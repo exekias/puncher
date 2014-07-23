@@ -1,6 +1,6 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 # PYTHON_ARGCOMPLETE_OK
-# encoding: utf-8
 import argparse
 import codecs
 import keyring
@@ -12,6 +12,7 @@ import requests
 import configobj
 import getpass
 import threading
+from operator import itemgetter
 
 try:
     import argcomplete
@@ -84,15 +85,40 @@ class Puncher(object):
         self._post('adage-down')
 
     def people_working(self):
+        """
+        Return a dict:
+           - working : names of people working
+           - holidays: list of lists of people on holidays
+                       0 - name  1 - start  2 - end
+        """
         body = self._get('hq')
         name_re = re.compile(r"<td>([^0-9]*)</td>")
-        ret = []
+        holiday_re = re.compile(r'<a href="/flextime/vacations.*>([^0-9]+)</a>')
+        date_re = re.compile(r'<td>([0-9]{2,4}-[0-9]{2}-[0-9]{2})</td>')
+        working = []
+        holidays = []
+        on_holiday = False
         for line in body.split("\n"):
-            name = name_re.search(line)
-            if name:
-                ret.append(name.group(1))
+            if on_holiday:
+                date = date_re.search(line)
+                if date:
+                    holidays[-1].append(date.group(1))
+                    if len(holidays[-1]) == 3:
+                        on_holiday = False
+            else:
+                name = name_re.search(line)
+                if name:
+                    working.append(name.group(1))
+                else:
+                    name = holiday_re.search(line)
+                    if name:
+                        holidays.append([name.group(1)])
+                        on_holiday = True
+
         # Return the names sorted by first name
-        return sorted(ret)
+        # And people on holidays by the first to finish them
+        return {'working': sorted(working),
+                'holidays': sorted(holidays, key=itemgetter(2))}
 
     def working_info(self, body=None):
         """
@@ -146,9 +172,18 @@ class Puncher(object):
 def print_people_working(people_working):
     print bcolors.HEADER + "People working"
     print "==============" + bcolors.ENDC + bcolors.OKBLUE
-    for person in people_working:
+    for person in people_working['working']:
         print person
     print bcolors.ENDC
+
+    if people_working['holidays']:
+        # find the length of the longest person and add 2
+        max_length = max(len(p[0]) for p in people_working['holidays']) + 2
+        print bcolors.HEADER + "People on holidays"
+        print "==================" + bcolors.ENDC + bcolors.OKBLUE
+        for person, start, end in people_working['holidays']:
+            print u"%s (%s -> %s)" % (person.ljust(max_length), start, end)
+        print bcolors.ENDC
 
 
 def print_working_info(working_info):
