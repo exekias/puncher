@@ -12,7 +12,9 @@ import requests
 import configobj
 import getpass
 import threading
+from HTMLParser import HTMLParser
 from operator import itemgetter
+
 
 try:
     import argcomplete
@@ -156,6 +158,10 @@ class Puncher(object):
         adage_author = adage_author.group(1) if adage_author else '?'
         adage_votes = adage_votes.group(1) if adage_votes else '?'
         adage_karma = adage_karma.group(1) if adage_karma else '?'
+
+        html_parser = HTMLParser()
+        adage_message = html_parser.unescape(adage_message)
+        adage_creator = html_parser.unescape(adage_creator)
 
         return (day, week, is_punched_in, adage_message,
                 adage_creator, adage_author, adage_votes, adage_karma)
