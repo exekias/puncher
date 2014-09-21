@@ -113,7 +113,7 @@ class Puncher(object):
                     working.append(name.group(1))
                 else:
                     name = holiday_re.search(line)
-                    if name:
+                    if name and len(name.group(1).split(' ')) > 1:
                         holidays.append([name.group(1)])
                         on_holiday = True
 
